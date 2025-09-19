@@ -125,28 +125,28 @@ def blueprint_score(row, w):
     c_nat = str(row.get("clientmts_nationality_preference", "any")).strip().lower()
     m_nat_raw = str(row.get("maid_grouped_nationality", "unspecified")).lower()
 
-    # Normalization map for consistent matching
+    # Normalization map
     norm_map = {
         "ethiopian": "ethiopian",
         "ethiopian maid": "ethiopian",
         "filipina": "filipina",
         "filipina maid": "filipina",
         "west_african": "west_african",
+        "west african nationality": "west_african",
         "west_african_nationality": "west_african",
     }
 
-    # Normalize maid nationalities
+    # Normalize maid nationalities (can be multiple, joined by "+")
     m_nat_cleaned = []
     for n in m_nat_raw.split("+"):
-        n_clean = n.replace("maid", "").strip()
-        m_nat_cleaned.append(norm_map.get(n.strip(), n_clean))
-
+        n = n.strip().replace("_", " ")  # unify underscores and spaces
+        m_nat_cleaned.append(norm_map.get(n, n))
     m_nat_set = set(filter(None, m_nat_cleaned))
 
     # Normalize client preference
     c_nat = norm_map.get(c_nat, c_nat)
 
-    if c_nat != "any" and c_nat != "unspecified":
+    if c_nat not in ["any", "unspecified"]:
         requirement_max += w["nationality"]
         if c_nat in m_nat_set:
             requirement_score += w["nationality"]
