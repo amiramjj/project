@@ -1,12 +1,4 @@
-import streamlit as st
-import pandas as pd
-import matplotlib.pyplot as plt
-
-import streamlit as st
-import pandas as pd
-import matplotlib.pyplot as plt
-
-# -------------------------------
+------------------------------
 # Page Config: Full Width Layout
 # -------------------------------
 st.set_page_config(layout="wide")
@@ -19,8 +11,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # -------------------------------
-# Blueprint Scoring Function with Explanations (Updated)
+# Final Blueprint Scoring Function
 # -------------------------------
+
+import pandas as pd
+
 def blueprint_score(row, w):
     requirement_score = 0.0
     requirement_max = 0.0
@@ -32,39 +27,58 @@ def blueprint_score(row, w):
     neutral_explanations = []
 
     # ----- REQUIREMENTS -----
-    # Household type
+    # Household & Kids
     c_house = row.get("clientmts_household_type", "unspecified")
     m_house = row.get("maidmts_household_type", "unspecified")
+    kids_exp = row.get("maidpref_kids_experience", "unspecified")
+
     if c_house != "unspecified":
         requirement_max += w["household"]
-        if (c_house == "baby" and m_house != "refuses_baby") or \
-           (c_house == "many_kids" and m_house != "refuses_many_kids") or \
-           (c_house == "baby_and_kids" and m_house != "refuses_baby_and_kids"):
+        if ((c_house == "baby" and m_house != "refuses_baby" and kids_exp in ["lessthan2", "both"]) or
+            (c_house == "many_kids" and m_house != "refuses_many_kids" and kids_exp in ["above2", "both"]) or
+            (c_house == "baby_and_kids" and m_house != "refuses_baby_and_kids" and kids_exp == "both")):
             requirement_score += w["household"]
-            req_explanations.append(f"Client wants {c_house}, maid accepts.")
+            req_explanations.append(f"Client wants {c_house}, maid accepts and has matching kids experience.")
         else:
             penalties += w["household"]
-            pen_explanations.append(f"Client wants {c_house}, but maid refuses.")
+            pen_explanations.append(f"Client wants {c_house}, but maid refuses or did not specify.")
     else:
         neutral_explanations.append("Client did not specify household type.")
 
-    # Special cases
+    # Special Care Needs
     c_special = row.get("clientmts_special_cases", "unspecified")
     m_care = row.get("maidpref_caregiving_profile", "unspecified")
     if c_special != "unspecified":
         requirement_max += w["special_cases"]
-        if (c_special == "elderly" and m_care in ["elderly_experienced", "elderly_and_special"]) or \
-           (c_special == "special_needs" and m_care in ["special_needs", "elderly_and_special"]) or \
-           (c_special == "elderly_and_special" and m_care == "elderly_and_special"):
+        if ((c_special == "elderly" and m_care in ["elderly_experienced", "elderly_and_special"]) or
+            (c_special == "special_needs" and m_care in ["special_needs", "elderly_and_special"]) or
+            (c_special == "elderly_and_special" and m_care == "elderly_and_special")):
             requirement_score += w["special_cases"]
             req_explanations.append(f"Client needs {c_special} care, maid has experience.")
         else:
             penalties += w["special_cases"]
-            pen_explanations.append(f"Client needs {c_special} care, maid lacks experience.")
+            pen_explanations.append(f"Client needs {c_special} care, maid lacks or did not specify experience.")
     else:
         neutral_explanations.append("Client did not specify special care needs.")
 
-    # Day-off
+    # Pets
+    c_pets = row.get("clientmts_pet_type", "no_pets")
+    m_pets = row.get("maidmts_pet_type", "unspecified")
+    pet_handling = row.get("maidpref_pet_handling", "unspecified")
+    if c_pets != "no_pets":
+        requirement_max += w["pets"]
+        if ((c_pets == "cat" and m_pets != "refuses_cat" and pet_handling in ["cats", "both"]) or
+            (c_pets == "dog" and m_pets != "refuses_dog" and pet_handling in ["dogs", "both"]) or
+            (c_pets == "both" and m_pets != "refuses_both_pets" and pet_handling == "both")):
+            requirement_score += w["pets"]
+            req_explanations.append(f"Client has {c_pets}, maid accepts and can handle them.")
+        else:
+            penalties += w["pets"]
+            pen_explanations.append(f"Client has {c_pets}, maid refuses or did not specify handling.")
+    else:
+        neutral_explanations.append("Client did not specify pet preference.")
+
+    # Day-off Policy
     c_dayoff = row.get("clientmts_dayoff_policy", "unspecified")
     m_dayoff = row.get("maidmts_dayoff_policy", "unspecified")
     if c_dayoff != "unspecified":
@@ -78,51 +92,42 @@ def blueprint_score(row, w):
     else:
         neutral_explanations.append("Client did not specify day-off policy.")
 
-    # Living arrangement
+    # Living Arrangement
     c_living = row.get("clientmts_living_arrangement", "unspecified")
     m_living = row.get("maidmts_living_arrangement", "unspecified")
+    m_travel = row.get("maidpref_travel", "unspecified")
     if c_living != "unspecified":
         requirement_max += w["living"]
-        if ("private_room" in c_living and "requires_no_private_room" not in m_living):
+        if ("private_room" in c_living and "requires_no_private_room" not in m_living) or \
+           ("abu_dhabi" in c_living and "refuses_abu_dhabi" not in m_living):
             requirement_score += w["living"]
             req_explanations.append("Living arrangement accepted.")
         else:
             penalties += w["living"]
-            pen_explanations.append("Living arrangement mismatch.")
+            pen_explanations.append("Living arrangement mismatch or maid did not specify.")
     else:
         neutral_explanations.append("Client did not specify living arrangement.")
-
-    # Pets
-    c_pets = row.get("clientmts_pet_type", "no_pets")
-    m_pets = row.get("maidmts_pet_type", "unspecified")
-    if c_pets != "no_pets":
-        requirement_max += w["pets"]
-        if (c_pets == "cat" and m_pets != "refuses_cat") or \
-           (c_pets == "dog" and m_pets != "refuses_dog") or \
-           (c_pets == "both" and m_pets != "refuses_both_pets"):
-            requirement_score += w["pets"]
-            req_explanations.append(f"Client has {c_pets}, maid accepts.")
-        else:
-            penalties += w["pets"]
-            pen_explanations.append(f"Client has {c_pets}, maid refuses.")
-    else:
-        neutral_explanations.append("Client did not specify pet preference.")
+        if m_travel == "travel_and_relocate":
+            bonus_explanations.append("Maid is flexible for travel/relocation.")
 
     # Nationality
-    if row.get("clientmts_nationality_preference", "any") != "any":
+    c_nat = row.get("clientmts_nationality_preference", "any")
+    m_nat = str(row.get("maid_nationality", "unspecified"))
+    if c_nat != "any":
         requirement_max += w["nationality"]
-        if row["clientmts_nationality_preference"] in str(row.get("maid_nationality", "")):
+        if c_nat in m_nat:
             requirement_score += w["nationality"]
             req_explanations.append("Nationality preference matched.")
         else:
-            pen_explanations.append("Nationality preference not matched.")
+            penalties += w["nationality"]
+            pen_explanations.append("Nationality preference not matched or unspecified.")
     else:
         neutral_explanations.append("Client did not specify nationality preference.")
 
     # Cuisine
     c_cuisine = row.get("clientmts_cuisine_preference", "unspecified")
     m_cooking = str(row.get("cooking_group", "not_specified"))
-    if c_cuisine != "unspecified" and m_cooking != "not_specified":
+    if c_cuisine != "unspecified":
         requirement_max += w["cuisine"]
         c_set = set(c_cuisine.split("+"))
         m_set = set(m_cooking.split("+"))
@@ -130,17 +135,20 @@ def blueprint_score(row, w):
             requirement_score += w["cuisine"]
             req_explanations.append("Cuisine preference matched.")
         else:
-            pen_explanations.append("Cuisine preference mismatch.")
+            penalties += w["cuisine"]
+            pen_explanations.append("Cuisine preference mismatch or maid unspecified.")
     else:
         neutral_explanations.append("Client did not specify cuisine preference.")
+        if "multi" in m_cooking:
+            bonus_explanations.append("Maid has multi-cuisine experience.")
 
     # ----- PENALTIES -----
-    if row.get("maidpref_smoking") != "non_smoker":
+    if row.get("maidpref_smoking", "unspecified") != "non_smoker":
         penalties += w["smoking"]
-        pen_explanations.append("Maid is a smoker (penalty).")
+        pen_explanations.append("Maid is a smoker or unspecified (penalty).")
 
-    maid_personality = str(row.get("maidpref_personality", ""))
-    if "attitude" in maid_personality and "no_attitude" not in maid_personality:
+    maid_personality = str(row.get("maidpref_personality", "unspecified"))
+    if "bad_attitude" in maid_personality:
         penalties += w["attitude"]
         pen_explanations.append("Maid shows negative attitude (penalty).")
     elif "no_attitude" in maid_personality:
@@ -155,22 +163,28 @@ def blueprint_score(row, w):
         bonus_explanations.append("Veg-friendly")
     if "energetic" in maid_personality:
         bonus_explanations.append("Energetic")
+    if "polite" in maid_personality:
+        bonus_explanations.append("Polite")
+    if "cooperative" in maid_personality:
+        bonus_explanations.append("Cooperative")
     if row.get("maidpref_education") not in ["unspecified", None]:
         bonus_explanations.append(f"Education: {row.get('maidpref_education')}")
+    if "elderly" in m_care or "special_needs" in m_care:
+        bonus_explanations.append("Extra caregiving skills")
 
-    # Final score
+    # ----- FINAL SCORE -----
     requirement_pct = (requirement_score / requirement_max * 100) if requirement_max > 0 else 0
-    final_score = max(0, requirement_pct - penalties * 100)
+    # Each bonus worth ~+2 points
+    final_score = max(0, min(100, requirement_pct - penalties * 100 + len(bonus_explanations) * 2))
 
     return pd.Series({
-        "requirement_pct": requirement_pct,
-        "final_score": final_score,
+        "requirement_pct": round(requirement_pct, 2),
+        "final_score": round(final_score, 2),
         "requirements": "; ".join(req_explanations),
         "penalties": "; ".join(pen_explanations),
         "bonuses": ", ".join(bonus_explanations),
         "not_specified": "; ".join(neutral_explanations)
     })
-
 
 # -------------------------------
 # Streamlit App
