@@ -137,6 +137,7 @@ def blueprint_score(row, w):
     
         # West African
         "west_african": "west_african",
+        "west african": "west_african",
         "west african nationality": "west_african",
         "west_african_nationality": "west_african",
     }
