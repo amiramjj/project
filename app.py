@@ -24,9 +24,6 @@ w = {
 # -------------------------------
 # Scoring function
 # -------------------------------
-# -------------------------------
-# Scoring function
-# -------------------------------
 def blueprint_score(row, w):
     requirement_score = 0.0
     requirement_max = 0.0
@@ -125,17 +122,26 @@ def blueprint_score(row, w):
             bonus_explanations.append("Maid is flexible for travel/relocation.")
 
     # ---- Nationality ----
-    c_nat = row.get("clientmts_nationality_preference", "any")
-    m_nat = str(row.get("maid_grouped_nationality", "unspecified"))
-    
-    if c_nat != "any":
+    c_nat = str(row.get("clientmts_nationality_preference", "any")).strip().lower()
+    m_nat_raw = str(row.get("maid_grouped_nationality", "unspecified")).lower()
+
+    # Clean maid nationalities: remove "maid", split on "+"
+    m_nat_cleaned = [
+        n.replace("maid", "").strip()
+        for n in m_nat_raw.split("+")
+    ]
+    m_nat_set = set(filter(None, m_nat_cleaned))  # remove empty strings
+
+    if c_nat != "any" and c_nat != "unspecified":
         requirement_max += w["nationality"]
-        if c_nat in m_nat:
+        if c_nat in m_nat_set:
             requirement_score += w["nationality"]
             req_explanations.append("Nationality preference matched.")
         else:
             penalties += w["nationality"]
-            pen_explanations.append("Nationality preference not matched.")
+            pen_explanations.append(
+                f"Client requires {c_nat}, maid nationalities are {', '.join(m_nat_set) if m_nat_set else 'unspecified'}."
+            )
     else:
         neutral_explanations.append("Client did not specify nationality preference.")
 
