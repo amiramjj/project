@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import matplotlib.pyplot as plt
 
 # -------------------------------
 # Blueprint Scoring Function with Explanations
@@ -14,7 +15,6 @@ def blueprint_score(row, w):
     bonuses = []
 
     # ----- REQUIREMENTS -----
-    # Household type
     c_house = row.get("clientmts_household_type", "unspecified")
     m_house = row.get("maidmts_household_type", "unspecified")
     if c_house != "unspecified":
@@ -28,7 +28,7 @@ def blueprint_score(row, w):
             penalties += w["household"]
             pen_explanations.append(f"Client wants {c_house}, but maid refuses.")
 
-    # Special cases (elderly / special needs)
+    # Special cases
     c_special = row.get("clientmts_special_cases", "unspecified")
     m_care = row.get("maidpref_caregiving_profile", "unspecified")
     if c_special != "unspecified":
@@ -42,7 +42,7 @@ def blueprint_score(row, w):
             penalties += w["special_cases"]
             pen_explanations.append(f"Client needs {c_special} care, maid lacks experience.")
 
-    # Day-off policy
+    # Day-off
     c_dayoff = row.get("clientmts_dayoff_policy", "unspecified")
     m_dayoff = row.get("maidmts_dayoff_policy", "unspecified")
     if c_dayoff != "unspecified":
@@ -80,14 +80,14 @@ def blueprint_score(row, w):
             penalties += w["pets"]
             pen_explanations.append(f"Client has {c_pets}, maid refuses.")
 
-    # Nationality preference
+    # Nationality
     if row.get("clientmts_nationality_preference", "any") != "any":
         requirement_max += w["nationality"]
         if row["clientmts_nationality_preference"] in str(row.get("maid_nationality", "")):
             requirement_score += w["nationality"]
             req_explanations.append("Nationality preference matched.")
 
-    # Cuisine preference
+    # Cuisine
     c_cuisine = row.get("clientmts_cuisine_preference", "unspecified")
     m_cooking = str(row.get("cooking_group", "not_specified"))
     if c_cuisine != "unspecified" and m_cooking != "not_specified":
@@ -98,7 +98,7 @@ def blueprint_score(row, w):
             requirement_score += w["cuisine"]
             req_explanations.append("Cuisine preference matched.")
 
-    # ----- PENALTIES (red flags) -----
+    # ----- PENALTIES -----
     if row.get("maidpref_smoking") != "non_smoker":
         penalties += w["smoking"]
         pen_explanations.append("Maid is a smoker (penalty).")
@@ -135,7 +135,7 @@ def blueprint_score(row, w):
 # -------------------------------
 # Streamlit App
 # -------------------------------
-st.title("Client–Maid Matching Score (Interactive Blueprint)")
+st.title("Client–Maid Matching Score (Interactive Blueprint + Charts)")
 
 # Sidebar weights
 st.sidebar.header("⚖️ Adjust Weights")
@@ -182,3 +182,22 @@ if uploaded_file:
             st.write(row["penalties"] if row["penalties"] else "None")
             st.markdown("🌟 **Bonus Traits:**")
             st.write(row["bonuses"] if row["bonuses"] else "None")
+
+    # -------------------------------
+    # Charts: Distribution of scores
+    # -------------------------------
+    st.write("### 📊 Score Distribution Across All Matches")
+
+    fig, ax = plt.subplots()
+    ax.hist(results["final_score"], bins=20, edgecolor="black")
+    ax.set_title("Distribution of Final Scores")
+    ax.set_xlabel("Final Score (%)")
+    ax.set_ylabel("Number of Matches")
+    st.pyplot(fig)
+
+    # Optional: Boxplot for spread
+    fig2, ax2 = plt.subplots()
+    ax2.boxplot(results["final_score"], vert=False)
+    ax2.set_title("Score Spread (Boxplot)")
+    ax2.set_xlabel("Final Score (%)")
+    st.pyplot(fig2)
