@@ -24,6 +24,9 @@ w = {
 # -------------------------------
 # Scoring function
 # -------------------------------
+# -------------------------------
+# Scoring function
+# -------------------------------
 def blueprint_score(row, w):
     requirement_score = 0.0
     requirement_max = 0.0
@@ -47,6 +50,9 @@ def blueprint_score(row, w):
             pen_explanations.append(f"Client requires {c_house}, maid does not meet this need.")
     else:
         neutral_explanations.append("Client did not specify household type.")
+        # Bonus if maid has kids experience anyway
+        if kids_exp in ["lessthan2", "above2", "both"]:
+            bonus_explanations.append(f"Maid has kids experience ({kids_exp}).")
 
     # ---- Special Care ----
     c_special = row.get("clientmts_special_cases", "unspecified")
@@ -63,6 +69,9 @@ def blueprint_score(row, w):
             pen_explanations.append(f"Client requires {c_special} care, maid lacks relevant experience.")
     else:
         neutral_explanations.append("Client did not specify special care needs.")
+        # Bonus if maid has care profile anyway
+        if m_care in ["elderly_experienced", "special_needs", "elderly_and_special"]:
+            bonus_explanations.append(f"Maid has {m_care.replace('_',' ')} experience.")
 
     # ---- Pets ----
     c_pets = row.get("clientmts_pet_type", "no_pets")
@@ -80,6 +89,8 @@ def blueprint_score(row, w):
             pen_explanations.append(f"Client has {c_pets}, maid cannot handle them.")
     else:
         neutral_explanations.append("Client did not specify pet preference.")
+        if pet_handling in ["cats", "dogs", "both"]:
+            bonus_explanations.append(f"Maid can handle pets: {pet_handling}.")
 
     # ---- Day-off ----
     c_dayoff = row.get("clientmts_dayoff_policy", "unspecified")
@@ -98,6 +109,7 @@ def blueprint_score(row, w):
     # ---- Living Arrangement ----
     c_living = row.get("clientmts_living_arrangement", "unspecified")
     m_living = row.get("maidmts_living_arrangement", "unspecified")
+    m_travel = row.get("maidpref_travel", "unspecified")
     if c_living != "unspecified":
         requirement_max += w["living"]
         if ("private_room" in c_living and "requires_no_private_room" not in m_living) or \
@@ -109,6 +121,8 @@ def blueprint_score(row, w):
             pen_explanations.append("Living arrangement does not meet client’s requirement.")
     else:
         neutral_explanations.append("Client did not specify living arrangement.")
+        if m_travel == "travel_and_relocate":
+            bonus_explanations.append("Maid is flexible for travel/relocation.")
 
     # ---- Nationality ----
     c_nat = row.get("clientmts_nationality_preference", "any")
@@ -147,6 +161,27 @@ def blueprint_score(row, w):
         if maid_known:
             bonus_explanations.append(f"Maid can cook: {', '.join(maid_known)}.")
 
+    # ---- Bonus Traits (only if client did not require them) ----
+    client_prefs = str(row.get("client_mts_at_hiring", "")).lower()
+    maid_personality = str(row.get("maidpref_personality", "unspecified"))
+
+    if "non-smoker" not in client_prefs and row.get("maidpref_smoking") == "non_smoker":
+        bonus_explanations.append("Maid is a non-smoker")
+    if "no_attitude" in maid_personality and "attitude" not in client_prefs:
+        bonus_explanations.append("Maid does not have attitude")
+    if "polite" in maid_personality and "polite" not in client_prefs:
+        bonus_explanations.append("Maid is polite")
+    if "cooperative" in maid_personality and "cooperative" not in client_prefs:
+        bonus_explanations.append("Maid is cooperative")
+    if "energetic" in maid_personality and "energetic" not in client_prefs:
+        bonus_explanations.append("Maid is energetic")
+    if "veg_friendly" in maid_personality and "veg" not in c_cuisine:
+        bonus_explanations.append("Maid is veg-friendly")
+    if row.get("num_languages", 1) > 1:
+        bonus_explanations.append(f"Maid speaks {row.get('num_languages')} languages")
+    if row.get("maidpref_education") not in ["unspecified", None] and "education" not in client_prefs:
+        bonus_explanations.append(f"Education: {row.get('maidpref_education')}")
+
     # ----- FINAL SCORE -----
     requirement_pct = (requirement_score / requirement_max * 100) if requirement_max > 0 else 0
     final_score = max(0, min(100, requirement_pct - penalties * 100 + len(bonus_explanations) * 2))
@@ -159,6 +194,7 @@ def blueprint_score(row, w):
         "bonuses": ", ".join(bonus_explanations),
         "not_specified": "; ".join(neutral_explanations)
     })
+
 
 # -------------------------------
 # Streamlit Layout
