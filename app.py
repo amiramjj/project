@@ -74,6 +74,7 @@ def blueprint_score(row, w):
     c_pets = row.get("clientmts_pet_type", "no_pets")
     m_pets = row.get("maidmts_pet_type", "unspecified")
     pet_handling = row.get("maidpref_pet_handling", "unspecified")
+    
     if c_pets != "no_pets":
         requirement_max += w["pets"]
         if ((c_pets == "cat" and m_pets != "refuses_cat" and pet_handling in ["cats", "both"]) or
@@ -127,26 +128,17 @@ def blueprint_score(row, w):
     
     # Normalization map
     norm_map = {
-        # Ethiopian
-        "ethiopian": "ethiopian",
-        "ethiopian maid": "ethiopian",
-    
-        # Filipina
-        "filipina": "filipina",
-        "filipina maid": "filipina",
-    
-        # West African
-        "west_african": "west_african",
-        "west african": "west_african",
-        "west african nationality": "west_african",
-        "west_african_nationality": "west_african",
+        "ethiopian": "ethiopian", "ethiopian maid": "ethiopian",
+        "filipina": "filipina", "filipina maid": "filipina",
+        "west_african": "west_african", "west african": "west_african",
+        "west african nationality": "west_african", "west_african_nationality": "west_african"
     }
     
-    # Normalize maid nationalities (handle multiple joined by '+')
+    # Normalize maid nationalities
     m_nat_cleaned = []
     for n in m_nat_raw.split("+"):
-        n = n.strip().replace("_", " ")  # unify underscores and spaces
-        n = norm_map.get(n, n)          # map to normalized
+        n = n.strip().replace("_", " ")  # unify underscores vs spaces
+        n = norm_map.get(n, n)          # normalize if in map
         m_nat_cleaned.append(n)
     m_nat_set = set(filter(None, m_nat_cleaned))
     
@@ -161,10 +153,11 @@ def blueprint_score(row, w):
         else:
             penalties += w["nationality"]
             pen_explanations.append(
-                f"Client requires {c_nat}, maid nationalities are {', '.join(m_nat_set) if m_nat_set else 'unspecified'}."
+                f"Client requires {c_nat}, maid nationalities are {', '.join(m_nat_set) if m_nat_set else 'none'}."
             )
     else:
         neutral_explanations.append("Client did not specify nationality preference.")
+
 
 
     # ---- Cuisine ----
