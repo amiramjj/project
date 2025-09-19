@@ -9,7 +9,8 @@ st.set_page_config(layout="wide")
 # Streamlit App for Matching Score
 # -------------------------------
 
-
+import streamlit as st
+import pandas as pd
 
 # ---- 1. Define weights ----
 w = {
@@ -27,8 +28,210 @@ w = {
     "attitude": 0.4,
 }
 
-# ---- 2. Import the scoring function ----
-from scoring_function import blueprint_score  # <-- save your function in scoring_function.py, or paste it here
+# ---- 2. Scoring function ----
+def blueprint_score(row, w):
+    requirement_score = 0.0
+    requirement_max = 0.0
+    penalties = 0.0
+
+    req_explanations = []
+    pen_explanations = []
+    bonus_explanations = []
+    neutral_explanations = []
+
+    # ----- REQUIREMENTS -----
+    # Household & Kids
+    c_house = row.get("clientmts_household_type", "unspecified")
+    m_house = row.get("maidmts_household_type", "unspecified")
+    kids_exp = row.get("maidpref_kids_experience", "unspecified")
+    if c_house != "unspecified":
+        requirement_max += w["household"]
+        if ((c_house == "baby" and m_house != "refuses_baby" and kids_exp in ["lessthan2", "both"]) or
+            (c_house == "many_kids" and m_house != "refuses_many_kids" and kids_exp in ["above2", "both"]) or
+            (c_house == "baby_and_kids" and m_house != "refuses_baby_and_kids" and kids_exp == "both")):
+            requirement_score += w["household"]
+            req_explanations.append(f"Client requires {c_house}, maid matches with experience.")
+        else:
+            penalties += w["household"]
+            pen_explanations.append(f"Client requires {c_house}, maid does not meet this need.")
+    else:
+        neutral_explanations.append("Client did not specify household type.")
+
+    # Special Care Needs
+    c_special = row.get("clientmts_special_cases", "unspecified")
+    m_care = row.get("maidpref_caregiving_profile", "unspecified")
+    if c_special != "unspecified":
+        requirement_max += w["special_cases"]
+        if ((c_special == "elderly" and m_care in ["elderly_experienced", "elderly_and_special"]) or
+            (c_special == "special_needs" and m_care in ["special_needs", "elderly_and_special"]) or
+            (c_special == "elderly_and_special" and m_care == "elderly_and_special")):
+            requirement_score += w["special_cases"]
+            req_explanations.append(f"Client requires {c_special} care, maid has relevant experience.")
+        else:
+            penalties += w["special_cases"]
+            pen_explanations.append(f"Client requires {c_special} care, maid lacks relevant experience.")
+    else:
+        neutral_explanations.append("Client did not specify special care needs.")
+
+    # Pets
+    c_pets = row.get("clientmts_pet_type", "no_pets")
+    m_pets = row.get("maidmts_pet_type", "unspecified")
+    pet_handling = row.get("maidpref_pet_handling", "unspecified")
+    if c_pets != "no_pets":
+        requirement_max += w["pets"]
+        if ((c_pets == "cat" and m_pets != "refuses_cat" and pet_handling in ["cats", "both"]) or
+            (c_pets == "dog" and m_pets != "refuses_dog" and pet_handling in ["dogs", "both"]) or
+            (c_pets == "both" and m_pets != "refuses_both_pets" and pet_handling == "both")):
+            requirement_score += w["pets"]
+            req_explanations.append(f"Client has {c_pets}, maid accepts and can handle them.")
+        else:
+            penalties += w["pets"]
+            pen_explanations.append(f"Client has {c_pets}, maid cannot handle them.")
+    else:
+        neutral_explanations.append("Client did not specify pet preference.")
+
+    # Day-off Policy
+    c_dayoff = row.get("clientmts_dayoff_policy", "unspecified")
+    m_dayoff = row.get("maidmts_dayoff_policy", "unspecified")
+    if c_dayoff != "unspecified":
+        requirement_max += w["dayoff"]
+        if m_dayoff != "refuses_fixed_sunday":
+            requirement_score += w["dayoff"]
+            req_explanations.append("Day-off policy is acceptable.")
+        else:
+            penalties += w["dayoff"]
+            pen_explanations.append("Day-off policy mismatch.")
+    else:
+        neutral_explanations.append("Client did not specify day-off policy.")
+
+    # Living Arrangement
+    c_living = row.get("clientmts_living_arrangement", "unspecified")
+    m_living = row.get("maidmts_living_arrangement", "unspecified")
+    m_travel = row.get("maidpref_travel", "unspecified")
+    if c_living != "unspecified":
+        requirement_max += w["living"]
+        if ("private_room" in c_living and "requires_no_private_room" not in m_living) or \
+           ("abu_dhabi" in c_living and "refuses_abu_dhabi" not in m_living):
+            requirement_score += w["living"]
+            req_explanations.append("Living arrangement accepted.")
+        else:
+            penalties += w["living"]
+            pen_explanations.append("Living arrangement does not meet client’s requirement.")
+    else:
+        neutral_explanations.append("Client did not specify living arrangement.")
+        if m_travel == "travel_and_relocate":
+            bonus_explanations.append("Maid is flexible for travel/relocation.")
+
+    # Nationality
+    c_nat = row.get("clientmts_nationality_preference", "any")
+    m_nat = str(row.get("maid_nationality", "unspecified"))
+    if c_nat != "any":
+        requirement_max += w["nationality"]
+        if c_nat in m_nat:
+            requirement_score += w["nationality"]
+            req_explanations.append("Nationality preference matched.")
+        else:
+            penalties += w["nationality"]
+            pen_explanations.append("Nationality preference not matched.")
+    else:
+        neutral_explanations.append("Client did not specify nationality preference.")
+
+    # Cuisine
+    c_cuisine = row.get("clientmts_cuisine_preference", "unspecified")
+    m_cooking = str(row.get("cooking_group", "not_specified"))
+    if c_cuisine != "unspecified":
+        requirement_max += w["cuisine"]
+        c_set = set(c_cuisine.split("+"))
+        m_set = set(m_cooking.split("+"))
+        if c_set & m_set:
+            requirement_score += w["cuisine"]
+            req_explanations.append("Cuisine preference matched.")
+        else:
+            penalties += w["cuisine"]
+            pen_explanations.append("Cuisine preference not matched.")
+    else:
+        neutral_explanations.append("Client did not specify cuisine preference.")
+        if "multi" in m_cooking:
+            bonus_explanations.append("Maid has multi-cuisine experience.")
+
+    # ----- CLIENT-DEFINED BONUS TRAITS AS REQUIREMENTS -----
+    client_prefs = str(row.get("client_mts_at_hiring", "")).lower()
+    maid_personality = str(row.get("maidpref_personality", "unspecified"))
+
+    # Non-smoker
+    if "non-smoker" in client_prefs:
+        requirement_max += w["smoking"]
+        if row.get("maidpref_smoking") == "non_smoker":
+            requirement_score += w["smoking"]
+            req_explanations.append("Client requires non-smoker, maid matches.")
+        else:
+            penalties += w["smoking"]
+            pen_explanations.append("Client requires non-smoker, maid does not match.")
+    else:
+        if row.get("maidpref_smoking") == "non_smoker":
+            bonus_explanations.append("Maid is a non-smoker")
+
+    # Personality traits
+    if "attitude" in client_prefs:
+        requirement_max += w["attitude"]
+        if "no_attitude" in maid_personality:
+            requirement_score += w["attitude"]
+            req_explanations.append("Client requires good attitude, maid matches.")
+        else:
+            penalties += w["attitude"]
+            pen_explanations.append("Client requires good attitude, maid does not match.")
+    else:
+        if "no_attitude" in maid_personality:
+            bonus_explanations.append("Maid does not have attitude")
+
+    if "polite" in client_prefs and "polite" in maid_personality:
+        req_explanations.append("Client requires polite, maid matches.")
+    elif "polite" in maid_personality:
+        bonus_explanations.append("Maid is polite")
+
+    if "cooperative" in client_prefs and "cooperative" in maid_personality:
+        req_explanations.append("Client requires cooperative, maid matches.")
+    elif "cooperative" in maid_personality:
+        bonus_explanations.append("Maid is cooperative")
+
+    if "energetic" in client_prefs and "energetic" in maid_personality:
+        req_explanations.append("Client requires energetic, maid matches.")
+    elif "energetic" in maid_personality:
+        bonus_explanations.append("Maid is energetic")
+
+    # Veg-friendly
+    if "veg" in c_cuisine and "veg_friendly" in maid_personality:
+        requirement_score += w["cuisine"]
+        req_explanations.append("Client requires veg-friendly, maid matches.")
+    elif "veg_friendly" in maid_personality:
+        bonus_explanations.append("Maid is veg-friendly")
+
+    # Languages
+    if "english" in client_prefs and "english" in str(row.get("maid_speaks_language", "")).lower():
+        req_explanations.append("Client requires English, maid speaks it.")
+    elif row.get("num_languages", 1) > 1:
+        bonus_explanations.append(f"Maid speaks {row.get('num_languages')} languages")
+
+    # Education
+    if "education" in client_prefs:
+        if row.get("maidpref_education") not in ["unspecified", None]:
+            req_explanations.append(f"Client requires education, maid has {row.get('maidpref_education')}.")
+    elif row.get("maidpref_education") not in ["unspecified", None]:
+        bonus_explanations.append(f"Education: {row.get('maidpref_education')}")
+
+    # ----- FINAL SCORE -----
+    requirement_pct = (requirement_score / requirement_max * 100) if requirement_max > 0 else 0
+    final_score = max(0, min(100, requirement_pct - penalties * 100 + len(bonus_explanations) * 2))
+
+    return pd.Series({
+        "requirement_pct": round(requirement_pct, 2),
+        "final_score": round(final_score, 2),
+        "requirements": "; ".join(req_explanations),
+        "penalties": "; ".join(pen_explanations),
+        "bonuses": ", ".join(bonus_explanations),
+        "not_specified": "; ".join(neutral_explanations)
+    })
+
 
 # ---- 3. Streamlit Layout ----
 st.set_page_config(layout="wide")  # use full width
@@ -51,11 +254,11 @@ if uploaded_file is not None:
     df_results = pd.concat([df[["client_name", "maid_id"]], results], axis=1)
 
     # ---- 6. Display main table (just final scores) ----
-    st.subheader("📊 Final Scores Overview")
+    st.subheader(" Final Scores Overview")
     st.dataframe(df_results[["client_name", "maid_id", "final_score"]].head(30))
 
     # ---- 7. Interactive details ----
-    st.subheader("🔍 Inspect Match Details")
+    st.subheader(" Inspect Match Details")
     selected_row = st.selectbox("Select a client-maid pair:", df_results.index)
 
     if selected_row is not None:
@@ -64,14 +267,14 @@ if uploaded_file is not None:
         st.markdown(f"### Client: `{row['client_name']}` | Maid: `{row['maid_id']}`")
         st.metric("Final Score", f"{row['final_score']}%")
 
-        with st.expander("✅ Requirements Met"):
+        with st.expander(" Requirements Met"):
             st.write(row["requirements"] if row["requirements"] else "None")
 
-        with st.expander("❌ Penalties"):
+        with st.expander(" Penalties"):
             st.write(row["penalties"] if row["penalties"] else "None")
 
-        with st.expander("🎁 Bonuses"):
+        with st.expander(" Bonuses"):
             st.write(row["bonuses"] if row["bonuses"] else "None")
 
-        with st.expander("ℹ️ Not Specified"):
+        with st.expander(" Not Specified"):
             st.write(row["not_specified"] if row["not_specified"] else "None")
