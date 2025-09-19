@@ -137,22 +137,35 @@ def blueprint_score(row, w):
         neutral_explanations.append("Client did not specify nationality preference.")
 
     # Cuisine
-    c_cuisine = row.get("clientmts_cuisine_preference", "unspecified")
-    m_cooking = str(row.get("cooking_group", "not_specified"))
+    c_cuisine = row.get("clientmts_cuisine_preference", "unspecified").lower()
+
+    maid_cuisines = {
+        "khaleeji": row.get("maid_cooking_khaleeji", 0),
+        "lebanese": row.get("maid_cooking_lebanese", 0),
+        "international": row.get("maid_cooking_international", 0),
+        "not_specified": row.get("maid_cooking_not_specified", 0),
+    }
+
     if c_cuisine != "unspecified":
         requirement_max += w["cuisine"]
-        c_set = set(c_cuisine.split("+"))
-        m_set = set(m_cooking.split("+"))
-        if c_set & m_set:
+        client_cuisines = [c.strip().lower() for c in c_cuisine.split("+")]
+
+        # check if maid can cook at least one of the client’s requested cuisines
+        if any(maid_cuisines.get(c, 0) == 1 for c in client_cuisines):
             requirement_score += w["cuisine"]
-            req_explanations.append("Cuisine preference matched.")
+            req_explanations.append(f"Client requires {', '.join(client_cuisines)}, maid can cook at least one.")
         else:
             penalties += w["cuisine"]
-            pen_explanations.append("Cuisine preference not matched.")
+            pen_explanations.append(f"Client requires {', '.join(client_cuisines)}, maid cannot cook these.")
     else:
         neutral_explanations.append("Client did not specify cuisine preference.")
-        if "multi" in m_cooking:
-            bonus_explanations.append("Maid has multi-cuisine experience.")
+
+        # Bonus: maid can cook multiple cuisines
+        maid_known = [c for c, v in maid_cuisines.items() if v == 1 and c != "not_specified"]
+        if len(maid_known) > 1:
+            bonus_explanations.append(f"Maid can cook multiple cuisines: {', '.join(maid_known)}.")
+        elif len(maid_known) == 1:
+            bonus_explanations.append(f"Maid can cook {maid_known[0]}.")
 
     # ----- CLIENT-DEFINED BONUS TRAITS AS REQUIREMENTS -----
     client_prefs = str(row.get("client_mts_at_hiring", "")).lower()
