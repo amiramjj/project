@@ -126,7 +126,8 @@ def blueprint_score(row, w):
 
     # ---- Nationality ----
     c_nat = row.get("clientmts_nationality_preference", "any")
-    m_nat = str(row.get("maid_nationality", "unspecified"))
+    m_nat = str(row.get("maid_grouped_nationality", "unspecified"))
+    
     if c_nat != "any":
         requirement_max += w["nationality"]
         if c_nat in m_nat:
@@ -137,6 +138,7 @@ def blueprint_score(row, w):
             pen_explanations.append("Nationality preference not matched.")
     else:
         neutral_explanations.append("Client did not specify nationality preference.")
+
 
     # ---- Cuisine ----
     c_cuisine = row.get("clientmts_cuisine_preference", "unspecified").lower()
