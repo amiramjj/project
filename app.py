@@ -1,20 +1,15 @@
 import streamlit as st
 import pandas as pd
-#------------------------------
+
+# ------------------------------
 # Page Config: Full Width Layout
 # -------------------------------
 st.set_page_config(layout="wide")
 
 # -------------------------------
-# Streamlit App for Matching Score
+# Define weights
 # -------------------------------
-
-import streamlit as st
-import pandas as pd
-
-# ---- 1. Define weights ----
 w = {
-    # Requirements
     "household": 0.8,
     "special_cases": 0.8,
     "pets": 0.7,
@@ -22,25 +17,21 @@ w = {
     "living": 0.7,
     "nationality": 0.5,
     "cuisine": 0.4,
-
-    # Penalties
     "smoking": 0.4,
     "attitude": 0.4,
 }
 
-# ---- 2. Scoring function ----
+# -------------------------------
+# Scoring function
+# -------------------------------
 def blueprint_score(row, w):
     requirement_score = 0.0
     requirement_max = 0.0
     penalties = 0.0
 
-    req_explanations = []
-    pen_explanations = []
-    bonus_explanations = []
-    neutral_explanations = []
+    req_explanations, pen_explanations, bonus_explanations, neutral_explanations = [], [], [], []
 
-    # ----- REQUIREMENTS -----
-    # Household & Kids
+    # ---- Household & Kids ----
     c_house = row.get("clientmts_household_type", "unspecified")
     m_house = row.get("maidmts_household_type", "unspecified")
     kids_exp = row.get("maidpref_kids_experience", "unspecified")
@@ -57,7 +48,7 @@ def blueprint_score(row, w):
     else:
         neutral_explanations.append("Client did not specify household type.")
 
-    # Special Care Needs
+    # ---- Special Care ----
     c_special = row.get("clientmts_special_cases", "unspecified")
     m_care = row.get("maidpref_caregiving_profile", "unspecified")
     if c_special != "unspecified":
@@ -73,7 +64,7 @@ def blueprint_score(row, w):
     else:
         neutral_explanations.append("Client did not specify special care needs.")
 
-    # Pets
+    # ---- Pets ----
     c_pets = row.get("clientmts_pet_type", "no_pets")
     m_pets = row.get("maidmts_pet_type", "unspecified")
     pet_handling = row.get("maidpref_pet_handling", "unspecified")
@@ -90,7 +81,7 @@ def blueprint_score(row, w):
     else:
         neutral_explanations.append("Client did not specify pet preference.")
 
-    # Day-off Policy
+    # ---- Day-off ----
     c_dayoff = row.get("clientmts_dayoff_policy", "unspecified")
     m_dayoff = row.get("maidmts_dayoff_policy", "unspecified")
     if c_dayoff != "unspecified":
@@ -104,10 +95,9 @@ def blueprint_score(row, w):
     else:
         neutral_explanations.append("Client did not specify day-off policy.")
 
-    # Living Arrangement
+    # ---- Living Arrangement ----
     c_living = row.get("clientmts_living_arrangement", "unspecified")
     m_living = row.get("maidmts_living_arrangement", "unspecified")
-    m_travel = row.get("maidpref_travel", "unspecified")
     if c_living != "unspecified":
         requirement_max += w["living"]
         if ("private_room" in c_living and "requires_no_private_room" not in m_living) or \
@@ -119,10 +109,8 @@ def blueprint_score(row, w):
             pen_explanations.append("Living arrangement does not meet client’s requirement.")
     else:
         neutral_explanations.append("Client did not specify living arrangement.")
-        if m_travel == "travel_and_relocate":
-            bonus_explanations.append("Maid is flexible for travel/relocation.")
 
-    # Nationality
+    # ---- Nationality ----
     c_nat = row.get("clientmts_nationality_preference", "any")
     m_nat = str(row.get("maid_nationality", "unspecified"))
     if c_nat != "any":
@@ -136,21 +124,17 @@ def blueprint_score(row, w):
     else:
         neutral_explanations.append("Client did not specify nationality preference.")
 
-    # Cuisine
+    # ---- Cuisine ----
     c_cuisine = row.get("clientmts_cuisine_preference", "unspecified").lower()
-
     maid_cuisines = {
         "khaleeji": row.get("maid_cooking_khaleeji", 0),
         "lebanese": row.get("maid_cooking_lebanese", 0),
         "international": row.get("maid_cooking_international", 0),
         "not_specified": row.get("maid_cooking_not_specified", 0),
     }
-
     if c_cuisine != "unspecified":
         requirement_max += w["cuisine"]
         client_cuisines = [c.strip().lower() for c in c_cuisine.split("+")]
-
-        # check if maid can cook at least one of the client’s requested cuisines
         if any(maid_cuisines.get(c, 0) == 1 for c in client_cuisines):
             requirement_score += w["cuisine"]
             req_explanations.append(f"Client requires {', '.join(client_cuisines)}, maid can cook at least one.")
@@ -159,78 +143,9 @@ def blueprint_score(row, w):
             pen_explanations.append(f"Client requires {', '.join(client_cuisines)}, maid cannot cook these.")
     else:
         neutral_explanations.append("Client did not specify cuisine preference.")
-
-        # Bonus: maid can cook multiple cuisines
         maid_known = [c for c, v in maid_cuisines.items() if v == 1 and c != "not_specified"]
-        if len(maid_known) > 1:
-            bonus_explanations.append(f"Maid can cook multiple cuisines: {', '.join(maid_known)}.")
-        elif len(maid_known) == 1:
-            bonus_explanations.append(f"Maid can cook {maid_known[0]}.")
-
-    # ----- CLIENT-DEFINED BONUS TRAITS AS REQUIREMENTS -----
-    client_prefs = str(row.get("client_mts_at_hiring", "")).lower()
-    maid_personality = str(row.get("maidpref_personality", "unspecified"))
-
-    # Non-smoker
-    if "non-smoker" in client_prefs:
-        requirement_max += w["smoking"]
-        if row.get("maidpref_smoking") == "non_smoker":
-            requirement_score += w["smoking"]
-            req_explanations.append("Client requires non-smoker, maid matches.")
-        else:
-            penalties += w["smoking"]
-            pen_explanations.append("Client requires non-smoker, maid does not match.")
-    else:
-        if row.get("maidpref_smoking") == "non_smoker":
-            bonus_explanations.append("Maid is a non-smoker")
-
-    # Personality traits
-    if "attitude" in client_prefs:
-        requirement_max += w["attitude"]
-        if "no_attitude" in maid_personality:
-            requirement_score += w["attitude"]
-            req_explanations.append("Client requires good attitude, maid matches.")
-        else:
-            penalties += w["attitude"]
-            pen_explanations.append("Client requires good attitude, maid does not match.")
-    else:
-        if "no_attitude" in maid_personality:
-            bonus_explanations.append("Maid does not have attitude")
-
-    if "polite" in client_prefs and "polite" in maid_personality:
-        req_explanations.append("Client requires polite, maid matches.")
-    elif "polite" in maid_personality:
-        bonus_explanations.append("Maid is polite")
-
-    if "cooperative" in client_prefs and "cooperative" in maid_personality:
-        req_explanations.append("Client requires cooperative, maid matches.")
-    elif "cooperative" in maid_personality:
-        bonus_explanations.append("Maid is cooperative")
-
-    if "energetic" in client_prefs and "energetic" in maid_personality:
-        req_explanations.append("Client requires energetic, maid matches.")
-    elif "energetic" in maid_personality:
-        bonus_explanations.append("Maid is energetic")
-
-    # Veg-friendly
-    if "veg" in c_cuisine and "veg_friendly" in maid_personality:
-        requirement_score += w["cuisine"]
-        req_explanations.append("Client requires veg-friendly, maid matches.")
-    elif "veg_friendly" in maid_personality:
-        bonus_explanations.append("Maid is veg-friendly")
-
-    # Languages
-    if "english" in client_prefs and "english" in str(row.get("maid_speaks_language", "")).lower():
-        req_explanations.append("Client requires English, maid speaks it.")
-    elif row.get("num_languages", 1) > 1:
-        bonus_explanations.append(f"Maid speaks {row.get('num_languages')} languages")
-
-    # Education
-    if "education" in client_prefs:
-        if row.get("maidpref_education") not in ["unspecified", None]:
-            req_explanations.append(f"Client requires education, maid has {row.get('maidpref_education')}.")
-    elif row.get("maidpref_education") not in ["unspecified", None]:
-        bonus_explanations.append(f"Education: {row.get('maidpref_education')}")
+        if maid_known:
+            bonus_explanations.append(f"Maid can cook: {', '.join(maid_known)}.")
 
     # ----- FINAL SCORE -----
     requirement_pct = (requirement_score / requirement_max * 100) if requirement_max > 0 else 0
@@ -245,16 +160,13 @@ def blueprint_score(row, w):
         "not_specified": "; ".join(neutral_explanations)
     })
 
-
-# ---- 3. Streamlit Layout ----
-st.set_page_config(layout="wide")  # use full width
-
+# -------------------------------
+# Streamlit Layout
+# -------------------------------
 st.title("🧾 Client–Maid Matching Score Dashboard")
 
-# ---- 4. File upload ----
 uploaded_file = st.file_uploader("Upload your dataset (CSV or Excel)", type=["csv", "xlsx"])
 if uploaded_file is not None:
-    # Load dataset
     if uploaded_file.name.endswith(".csv"):
         df = pd.read_csv(uploaded_file)
     else:
@@ -262,32 +174,56 @@ if uploaded_file is not None:
 
     st.success(f"Loaded dataset with {len(df)} rows.")
 
-    # ---- 5. Apply scoring ----
+    # Apply scoring to all rows
     results = df.apply(lambda row: blueprint_score(row, w), axis=1)
     df_results = pd.concat([df[["client_name", "maid_id"]], results], axis=1)
 
-    # ---- 6. Display main table (just final scores) ----
-    st.subheader(" Final Scores Overview")
-    st.dataframe(df_results[["client_name", "maid_id", "final_score"]].head(30))
-
-    # ---- 7. Interactive details ----
-    st.subheader(" Inspect Match Details")
-    selected_row = st.selectbox("Select a client-maid pair:", df_results.index)
-
-    if selected_row is not None:
-        row = df_results.loc[selected_row]
-
-        st.markdown(f"### Client: `{row['client_name']}` | Maid: `{row['maid_id']}`")
-        st.metric("Final Score", f"{row['final_score']}%")
-
-        with st.expander(" Requirements Met"):
-            st.write(row["requirements"] if row["requirements"] else "None")
-
-        with st.expander(" Penalties"):
-            st.write(row["penalties"] if row["penalties"] else "None")
-
-        with st.expander(" Bonuses"):
-            st.write(row["bonuses"] if row["bonuses"] else "None")
-
-        with st.expander(" Not Specified"):
-            st.write(row["not_specified"] if row["not_specified"] else "None")
+    # Show overview table
+    st.subheader("📊 Final Scores Overview")    
+    # Filter box
+    search_term = st.text_input("Search by Client or Maid ID").lower()
+    
+    if search_term:
+        filtered_df = df_results[
+            df_results["client_name"].str.lower().str.contains(search_term) |
+            df_results["maid_id"].astype(str).str.lower().str.contains(search_term)
+        ]
+    else:
+        filtered_df = df_results
+    
+    st.dataframe(filtered_df[["client_name", "maid_id", "final_score"]].head(30))
+    
+    # ---- 7. Download full results ----
+    csv = df_results.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        label="⬇️ Download Full Results as CSV",
+        data=csv,
+        file_name="matching_scores.csv",
+        mime="text/csv",
+    )
+    
+    # ---- 8. Interactive details ----
+    st.subheader("🔍 Inspect Match Details")
+    if not filtered_df.empty:
+        selected_row = st.selectbox(
+            "Select a client-maid pair:",
+            filtered_df.index,
+            format_func=lambda idx: f"{filtered_df.loc[idx, 'client_name']} | Maid {filtered_df.loc[idx, 'maid_id']}"
+        )
+    
+        if selected_row is not None:
+            row = filtered_df.loc[selected_row]
+            st.markdown(f"### Client: `{row['client_name']}` | Maid: `{row['maid_id']}`")
+            st.metric("Final Score", f"{row['final_score']}%")
+    
+            with st.expander("✅ Requirements Met"):
+                st.write(row["requirements"] if row["requirements"] else "None")
+    
+            with st.expander("❌ Penalties"):
+                st.write(row["penalties"] if row["penalties"] else "None")
+    
+            with st.expander("🎁 Bonuses"):
+                st.write(row["bonuses"] if row["bonuses"] else "None")
+    
+            with st.expander("ℹ️ Not Specified"):
+                st.write(row["not_specified"] if row["not_specified"] else "None")
