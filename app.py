@@ -122,30 +122,36 @@ def blueprint_score(row, w):
             bonus_explanations.append("Maid is flexible for travel/relocation.")
 
     # ---- Nationality ----
-    c_nat = str(row.get("clientmts_nationality_preference", "any")).strip().lower()
+    c_nat_raw = str(row.get("clientmts_nationality_preference", "any")).strip().lower()
     m_nat_raw = str(row.get("maid_grouped_nationality", "unspecified")).lower()
-
+    
     # Normalization map
     norm_map = {
+        # Ethiopian
         "ethiopian": "ethiopian",
         "ethiopian maid": "ethiopian",
+    
+        # Filipina
         "filipina": "filipina",
         "filipina maid": "filipina",
+    
+        # West African
         "west_african": "west_african",
         "west african nationality": "west_african",
         "west_african_nationality": "west_african",
     }
-
-    # Normalize maid nationalities (can be multiple, joined by "+")
+    
+    # Normalize maid nationalities (handle multiple joined by '+')
     m_nat_cleaned = []
     for n in m_nat_raw.split("+"):
         n = n.strip().replace("_", " ")  # unify underscores and spaces
-        m_nat_cleaned.append(norm_map.get(n, n))
+        n = norm_map.get(n, n)          # map to normalized
+        m_nat_cleaned.append(n)
     m_nat_set = set(filter(None, m_nat_cleaned))
-
+    
     # Normalize client preference
-    c_nat = norm_map.get(c_nat, c_nat)
-
+    c_nat = norm_map.get(c_nat_raw, c_nat_raw)
+    
     if c_nat not in ["any", "unspecified"]:
         requirement_max += w["nationality"]
         if c_nat in m_nat_set:
@@ -158,6 +164,7 @@ def blueprint_score(row, w):
             )
     else:
         neutral_explanations.append("Client did not specify nationality preference.")
+
 
     # ---- Cuisine ----
     c_cuisine = row.get("clientmts_cuisine_preference", "unspecified").lower()
