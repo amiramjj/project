@@ -284,54 +284,43 @@ if uploaded_file:
         st.download_button("Download Results CSV", results_df.to_csv(index=False).encode("utf-8"), "matching_results.csv", "text/csv")
 
     # ---------------- Tab 2: Optimal Matches ----------------
-    
     @st.cache_data
-    def compute_optimal_matches(df):
-        clients = df.drop_duplicates(subset=["client_name"]).reset_index(drop=True)
-        maids = df.drop_duplicates(subset=["maid_id"]).reset_index(drop=True)
-    
+    def compute_optimal_matches(clients, maids):
         results = []
         for _, client_row in clients.iterrows():
             candidate_scores = []
             for _, maid_row in maids.iterrows():
-                row = {**client_row.to_dict(), **maid_row.to_dict()}
-                score, reasons, bonus_reasons = calculate_score(row)
+                # Build synthetic row with both client + maid features
+                combined_row = {}
+                for col in client_row.index:
+                    if col.startswith("clientmts_") or col == "client_name":
+                        combined_row[col] = client_row[col]
+                for col in maid_row.index:
+                    if col.startswith("maid") or col.startswith("maidspeaks") or col == "maid_id":
+                        combined_row[col] = maid_row[col]
+
+                score, reasons, bonus_reasons = calculate_score(combined_row)
                 candidate_scores.append({
                     "maid_id": maid_row["maid_id"],
                     "Final Score %": score,
                     **reasons,
                     "Bonus Reasons": ", ".join(bonus_reasons) if bonus_reasons else "None"
                 })
-    
             top_matches = sorted(candidate_scores, key=lambda x: x["Final Score %"], reverse=True)[:3]
             for match in top_matches:
-                results.append({
-                    "client_name": client_row["client_name"],
-                    "maid_id": match["maid_id"],
-                    "Final Score %": match["Final Score %"],
-                    "Household & Kids Reason": match["Household & Kids Reason"],
-                    "Special Cases Reason": match["Special Cases Reason"],
-                    "Pets Reason": match["Pets Reason"],
-                    "Living Reason": match["Living Reason"],
-                    "Nationality Reason": match["Nationality Reason"],
-                    "Cuisine Reason": match["Cuisine Reason"],
-                    "Bonus Reasons": match["Bonus Reasons"]
-                })
-    
+                results.append({"client_name": client_row["client_name"], **match})
         return pd.DataFrame(results)
-    
-    
+
     with tab2:
-        st.write("### Optimal Matches (Top 3 Maids per Client)")
-    
-        # Call cached function instead of recomputing every time
-        optimal_df = compute_optimal_matches(df)
-        st.dataframe(optimal_df)
-    
-        # Dropdown to select a client and see their top 3 matches
+        st.write("### Optimal Matches (Top 3 per Client)")
+        clients = df.drop_duplicates(subset=["client_name"]).reset_index(drop=True)
+        maids = df.drop_duplicates(subset=["maid_id"]).reset_index(drop=True)
+
+        optimal_df = compute_optimal_matches(clients, maids)
+        st.dataframe(optimal_df.head(50))  # preview only
+
         client_options = optimal_df["client_name"].unique().tolist()
-        selected_client = st.selectbox("Select a Client to View Top 3 Matches", client_options)
-    
+        selected_client = st.selectbox("Select a Client", client_options)
         if selected_client:
             client_matches = optimal_df[optimal_df["client_name"] == selected_client]
             for _, row in client_matches.iterrows():
@@ -343,8 +332,5 @@ if uploaded_file:
                     st.write("**Nationality:**", row["Nationality Reason"])
                     st.write("**Cuisine:**", row["Cuisine Reason"])
                     st.write("**Bonus:**", row["Bonus Reasons"])
-    
-        st.download_button("Download Optimal Matches CSV",
-                           optimal_df.to_csv(index=False).encode("utf-8"),
-                           "optimal_matches.csv",
-                           "text/csv")
+
+        st.download_button("Download Optimal Matches CSV", optimal_df.to_csv(index=False).encode("utf-8"), "optimal_matches.csv", "text/csv")
