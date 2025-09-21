@@ -284,9 +284,9 @@ if uploaded_file:
         st.download_button("Download Results CSV", results_df.to_csv(index=False).encode("utf-8"), "matching_results.csv", "text/csv")
 
     # ---------------- Tab 2: Optimal Matches ----------------
-    with tab2:
-        st.write("### Optimal Matches (Top 3 Maids per Client)")
     
+    @st.cache_data
+    def compute_optimal_matches(df):
         clients = df.drop_duplicates(subset=["client_name"]).reset_index(drop=True)
         maids = df.drop_duplicates(subset=["maid_id"]).reset_index(drop=True)
     
@@ -318,7 +318,14 @@ if uploaded_file:
                     "Bonus Reasons": match["Bonus Reasons"]
                 })
     
-        optimal_df = pd.DataFrame(results)
+        return pd.DataFrame(results)
+    
+    
+    with tab2:
+        st.write("### Optimal Matches (Top 3 Maids per Client)")
+    
+        # Call cached function instead of recomputing every time
+        optimal_df = compute_optimal_matches(df)
         st.dataframe(optimal_df)
     
         # Dropdown to select a client and see their top 3 matches
