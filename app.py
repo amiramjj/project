@@ -235,13 +235,7 @@ def calculate_score(row):
     base_score = sum(scores) / sum(max_weights) * 100
     bonus, bonus_reasons = score_bonuses(row)
     final_score = min(base_score + bonus, 100)
-    unsuitable = (
-        (row["clientmts_pet_type"] != "unspecified" and "Mismatch" in theme_scores["Pets Reason"]) or
-        (row["clientmts_living_arrangement"] != "unspecified" and "Mismatch" in theme_scores["Living Reason"]) or
-        (row["clientmts_household_type"] != "unspecified" and "Mismatch" in theme_scores["Household & Kids Reason"]) or
-        (row["clientmts_nationality_preference"] != "any" and "Mismatch" in theme_scores["Nationality Reason"])
-    )
-    return round(final_score, 1), "Not Suitable" if unsuitable else "Suitable", theme_scores, bonus_reasons
+    return round(final_score, 1), "Score Only", theme_scores, bonus_reasons
 
 # -------------------------------
 # STREAMLIT APP
