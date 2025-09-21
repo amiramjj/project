@@ -262,7 +262,7 @@ if uploaded_file:
     st.write("### Detailed Explanations")
     
     # Create a dropdown of all client–maid pairs
-    pair_options = results_df.apply(lambda r: f"{r['client_name']} ↔ {r['maid_id']} ({r['Final Score %']}% | {r['Status']})", axis=1)
+    pair_options = results_df.apply(lambda r: f"{r['client_name']} ↔ {r['maid_id']} ({r['Final Score %']}%)", axis=1)
     selected_pair = st.selectbox("Select a Client–Maid Pair", pair_options)
     
     # Show explanations for the selected pair
