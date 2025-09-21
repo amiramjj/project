@@ -245,36 +245,99 @@ st.title("Client–Maid Matching Score Calculator")
 uploaded_file = st.file_uploader("Upload your dataset (CSV or Excel)", type=["csv", "xlsx"])
 if uploaded_file:
     df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith(".csv") else pd.read_excel(uploaded_file)
-    st.write("### Matching Scores (Key Fields Only)")
-    results = []
-    for _, row in df.iterrows():
-        score, reasons, bonus_reasons = calculate_score(row)
-        result_row = {
-            "client_name": row["client_name"],
-            "maid_id": row["maid_id"],
-            "Final Score %": score,
-            **reasons,
-            "Bonus Reasons": ", ".join(bonus_reasons) if bonus_reasons else "None"
-        }
-        results.append(result_row)
-    results_df = pd.DataFrame(results)
-    st.dataframe(results_df)
-    st.write("### Detailed Explanations")
-    
-    # Create a dropdown of all client–maid pairs
-    pair_options = results_df.apply(lambda r: f"{r['client_name']} ↔ {r['maid_id']} ({r['Final Score %']}%)", axis=1)
-    selected_pair = st.selectbox("Select a Client–Maid Pair", pair_options)
-    
-    # Show explanations for the selected pair
-    if selected_pair:
-        row = results_df.iloc[pair_options.tolist().index(selected_pair)]
-        st.subheader(f"Explanation for {row['client_name']} ↔ {row['maid_id']}")
-        st.write("**Household & Kids:**", row["Household & Kids Reason"])
-        st.write("**Special Cases:**", row["Special Cases Reason"])
-        st.write("**Pets:**", row["Pets Reason"])
-        st.write("**Living:**", row["Living Reason"])
-        st.write("**Nationality:**", row["Nationality Reason"])
-        st.write("**Cuisine:**", row["Cuisine Reason"])
-        st.write("**Bonus:**", row["Bonus Reasons"])
 
-    st.download_button("Download Results CSV", results_df.to_csv(index=False).encode("utf-8"), "matching_results.csv", "text/csv")
+    # Create tabs
+    tab1, tab2 = st.tabs(["Matching Scores", "Optimal Matches"])
+
+    # ---------------- Tab 1: Existing Matching ----------------
+    with tab1:
+        st.write("### Matching Scores (Key Fields Only)")
+        results = []
+        for _, row in df.iterrows():
+            score, reasons, bonus_reasons = calculate_score(row)
+            result_row = {
+                "client_name": row["client_name"],
+                "maid_id": row["maid_id"],
+                "Final Score %": score,
+                **reasons,
+                "Bonus Reasons": ", ".join(bonus_reasons) if bonus_reasons else "None"
+            }
+            results.append(result_row)
+        results_df = pd.DataFrame(results)
+        st.dataframe(results_df)
+
+        st.write("### Detailed Explanations")
+        pair_options = results_df.apply(lambda r: f"{r['client_name']} ↔ {r['maid_id']} ({r['Final Score %']}%)", axis=1)
+        selected_pair = st.selectbox("Select a Client–Maid Pair", pair_options)
+
+        if selected_pair:
+            row = results_df.iloc[pair_options.tolist().index(selected_pair)]
+            st.subheader(f"Explanation for {row['client_name']} ↔ {row['maid_id']}")
+            st.write("**Household & Kids:**", row["Household & Kids Reason"])
+            st.write("**Special Cases:**", row["Special Cases Reason"])
+            st.write("**Pets:**", row["Pets Reason"])
+            st.write("**Living:**", row["Living Reason"])
+            st.write("**Nationality:**", row["Nationality Reason"])
+            st.write("**Cuisine:**", row["Cuisine Reason"])
+            st.write("**Bonus:**", row["Bonus Reasons"])
+
+        st.download_button("Download Results CSV", results_df.to_csv(index=False).encode("utf-8"), "matching_results.csv", "text/csv")
+
+    # ---------------- Tab 2: Optimal Matches ----------------
+    with tab2:
+        st.write("### Optimal Matches (Top 3 Maids per Client)")
+    
+        clients = df.drop_duplicates(subset=["client_name"]).reset_index(drop=True)
+        maids = df.drop_duplicates(subset=["maid_id"]).reset_index(drop=True)
+    
+        results = []
+        for _, client_row in clients.iterrows():
+            candidate_scores = []
+            for _, maid_row in maids.iterrows():
+                row = {**client_row.to_dict(), **maid_row.to_dict()}
+                score, reasons, bonus_reasons = calculate_score(row)
+                candidate_scores.append({
+                    "maid_id": maid_row["maid_id"],
+                    "Final Score %": score,
+                    **reasons,
+                    "Bonus Reasons": ", ".join(bonus_reasons) if bonus_reasons else "None"
+                })
+    
+            top_matches = sorted(candidate_scores, key=lambda x: x["Final Score %"], reverse=True)[:3]
+            for match in top_matches:
+                results.append({
+                    "client_name": client_row["client_name"],
+                    "maid_id": match["maid_id"],
+                    "Final Score %": match["Final Score %"],
+                    "Household & Kids Reason": match["Household & Kids Reason"],
+                    "Special Cases Reason": match["Special Cases Reason"],
+                    "Pets Reason": match["Pets Reason"],
+                    "Living Reason": match["Living Reason"],
+                    "Nationality Reason": match["Nationality Reason"],
+                    "Cuisine Reason": match["Cuisine Reason"],
+                    "Bonus Reasons": match["Bonus Reasons"]
+                })
+    
+        optimal_df = pd.DataFrame(results)
+        st.dataframe(optimal_df)
+    
+        # Dropdown to select a client and see their top 3 matches
+        client_options = optimal_df["client_name"].unique().tolist()
+        selected_client = st.selectbox("Select a Client to View Top 3 Matches", client_options)
+    
+        if selected_client:
+            client_matches = optimal_df[optimal_df["client_name"] == selected_client]
+            for _, row in client_matches.iterrows():
+                with st.expander(f"Maid {row['maid_id']} → {row['Final Score %']}%"):
+                    st.write("**Household & Kids:**", row["Household & Kids Reason"])
+                    st.write("**Special Cases:**", row["Special Cases Reason"])
+                    st.write("**Pets:**", row["Pets Reason"])
+                    st.write("**Living:**", row["Living Reason"])
+                    st.write("**Nationality:**", row["Nationality Reason"])
+                    st.write("**Cuisine:**", row["Cuisine Reason"])
+                    st.write("**Bonus:**", row["Bonus Reasons"])
+    
+        st.download_button("Download Optimal Matches CSV",
+                           optimal_df.to_csv(index=False).encode("utf-8"),
+                           "optimal_matches.csv",
+                           "text/csv")
