@@ -17,7 +17,8 @@ THEME_WEIGHTS = {
     "nationality": 8,
     "cuisine": 6
 }
-BONUS_CAP = 10
+
+BONUS_CAP = 10  # max total bonus %
 
 # -------------------------------
 # HELPER FUNCTIONS WITH EXPLANATIONS
@@ -205,10 +206,10 @@ def calculate_score(row):
     final_score = min(base_score + bonus, 100)
 
     unsuitable = (
-        ("Mismatch" in theme_scores["Pets Reason"]) or
-        ("Mismatch" in theme_scores["Living Reason"]) or
-        ("Mismatch" in theme_scores["Household & Kids Reason"]) or
-        ("Mismatch" in theme_scores["Nationality Reason"])
+        (row["clientmts_pet_type"] != "unspecified" and "Mismatch" in theme_scores["Pets Reason"]) or
+        (row["clientmts_living_arrangement"] != "unspecified" and "Mismatch" in theme_scores["Living Reason"]) or
+        (row["clientmts_household_type"] != "unspecified" and "Mismatch" in theme_scores["Household & Kids Reason"]) or
+        (row["clientmts_nationality_preference"] != "any" and "Mismatch" in theme_scores["Nationality Reason"])
     )
 
     return round(final_score, 1), "Not Suitable" if unsuitable else "Suitable", theme_scores, bonus_reasons
@@ -226,13 +227,12 @@ if uploaded_file:
     else:
         df = pd.read_excel(uploaded_file)
 
-    st.write("### Matching Scores (Simplified Output)")
-
+    st.write("### Matching Scores (Key Fields Only)")
     results = []
     for _, row in df.iterrows():
         score, status, reasons, bonus_reasons = calculate_score(row)
         result_row = {
-            "client_id": row["client_id"],
+            "client_name": row["client_name"],
             "maid_id": row["maid_id"],
             "Final Score %": score,
             "Status": status,
@@ -247,7 +247,7 @@ if uploaded_file:
     # Expanders for detailed reasons
     st.write("### Detailed Explanations")
     for i, row in results_df.iterrows():
-        with st.expander(f"Client {row['client_id']} – Maid {row['maid_id']} | Score {row['Final Score %']}% | {row['Status']}"):
+        with st.expander(f"Client {row['client_name']} & Maid {row['maid_id']} → {row['Final Score %']}% | {row['Status']}"):
             st.write("**Household & Kids:**", row["Household & Kids Reason"])
             st.write("**Special Cases:**", row["Special Cases Reason"])
             st.write("**Pets:**", row["Pets Reason"])
