@@ -283,44 +283,92 @@ if uploaded_file:
 
         st.download_button("Download Results CSV", results_df.to_csv(index=False).encode("utf-8"), "matching_results.csv", "text/csv")
 
+    
     # ---------------- Tab 2: Optimal Matches ----------------
     @st.cache_data
-    def compute_optimal_matches(clients, maids):
+    def compute_optimal_matches(df):
+        clients = df.drop_duplicates(subset=["client_name"]).reset_index(drop=True)
+        maids = df.drop_duplicates(subset=["maid_id"]).reset_index(drop=True)
+    
         results = []
         for _, client_row in clients.iterrows():
             candidate_scores = []
             for _, maid_row in maids.iterrows():
-                # Build synthetic row with both client + maid features
-                combined_row = {}
-                for col in client_row.index:
-                    if col.startswith("clientmts_") or col == "client_name":
-                        combined_row[col] = client_row[col]
-                for col in maid_row.index:
-                    if col.startswith("maid") or col.startswith("maidspeaks") or col == "maid_id":
-                        combined_row[col] = maid_row[col]
-
-                score, reasons, bonus_reasons = calculate_score(combined_row)
+                # Build row with correct client vs maid features
+                row = {
+                    # ---- client side ----
+                    "clientmts_household_type": client_row["clientmts_household_type"],
+                    "clientmts_special_cases": client_row["clientmts_special_cases"],
+                    "clientmts_pet_type": client_row["clientmts_pet_type"],
+                    "clientmts_living_arrangement": client_row["clientmts_living_arrangement"],
+                    "clientmts_nationality_preference": client_row["clientmts_nationality_preference"],
+                    "clientmts_cuisine_preference": client_row["clientmts_cuisine_preference"],
+    
+                    # ---- maid side ----
+                    "maidmts_household_type": maid_row["maidmts_household_type"],
+                    "maidmts_pet_type": maid_row["maidmts_pet_type"],
+                    "maidmts_living_arrangement": maid_row["maidmts_living_arrangement"],
+    
+                    "maidpref_kids_experience": maid_row["maidpref_kids_experience"],
+                    "maidpref_caregiving_profile": maid_row["maidpref_caregiving_profile"],
+                    "maidpref_pet_handling": maid_row["maidpref_pet_handling"],
+                    "maidpref_education": maid_row["maidpref_education"],
+                    "maidpref_personality": maid_row["maidpref_personality"],
+                    "maidpref_travel": maid_row["maidpref_travel"],
+                    "maidpref_smoking": maid_row["maidpref_smoking"],
+    
+                    "maid_grouped_nationality": maid_row["maid_grouped_nationality"],
+                    "maid_cooking_lebanese": maid_row["maid_cooking_lebanese"],
+                    "maid_cooking_khaleeji": maid_row["maid_cooking_khaleeji"],
+                    "maid_cooking_international": maid_row["maid_cooking_international"],
+    
+                    "maidspeaks_arabic": maid_row["maidspeaks_arabic"],
+                    "maidspeaks_english": maid_row["maidspeaks_english"],
+                    "maidspeaks_french": maid_row["maidspeaks_french"],
+                    "maidspeaks_amharic": maid_row["maidspeaks_amharic"],
+                    "maidspeaks_oromo": maid_row["maidspeaks_oromo"],
+    
+                    "years_of_experience": maid_row["years_of_experience"],
+                }
+    
+                score, reasons, bonus_reasons = calculate_score(row)
+    
                 candidate_scores.append({
                     "maid_id": maid_row["maid_id"],
                     "Final Score %": score,
                     **reasons,
                     "Bonus Reasons": ", ".join(bonus_reasons) if bonus_reasons else "None"
                 })
+    
+            # take top 3 matches
             top_matches = sorted(candidate_scores, key=lambda x: x["Final Score %"], reverse=True)[:3]
             for match in top_matches:
-                results.append({"client_name": client_row["client_name"], **match})
+                results.append({
+                    "client_name": client_row["client_name"],
+                    "maid_id": match["maid_id"],
+                    "Final Score %": match["Final Score %"],
+                    "Household & Kids Reason": match["Household & Kids Reason"],
+                    "Special Cases Reason": match["Special Cases Reason"],
+                    "Pets Reason": match["Pets Reason"],
+                    "Living Reason": match["Living Reason"],
+                    "Nationality Reason": match["Nationality Reason"],
+                    "Cuisine Reason": match["Cuisine Reason"],
+                    "Bonus Reasons": match["Bonus Reasons"]
+                })
+    
         return pd.DataFrame(results)
-
+    
+    
     with tab2:
-        st.write("### Optimal Matches (Top 3 per Client)")
-        clients = df.drop_duplicates(subset=["client_name"]).reset_index(drop=True)
-        maids = df.drop_duplicates(subset=["maid_id"]).reset_index(drop=True)
-
-        optimal_df = compute_optimal_matches(clients, maids)
-        st.dataframe(optimal_df.head(50))  # preview only
-
+        st.write("### Optimal Matches (Top 3 Maids per Client)")
+    
+        optimal_df = compute_optimal_matches(df)
+        st.dataframe(optimal_df)
+    
+        # Dropdown to select a client and see their top 3 matches
         client_options = optimal_df["client_name"].unique().tolist()
-        selected_client = st.selectbox("Select a Client", client_options)
+        selected_client = st.selectbox("Select a Client to View Top 3 Matches", client_options)
+    
         if selected_client:
             client_matches = optimal_df[optimal_df["client_name"] == selected_client]
             for _, row in client_matches.iterrows():
@@ -332,5 +380,8 @@ if uploaded_file:
                     st.write("**Nationality:**", row["Nationality Reason"])
                     st.write("**Cuisine:**", row["Cuisine Reason"])
                     st.write("**Bonus:**", row["Bonus Reasons"])
-
-        st.download_button("Download Optimal Matches CSV", optimal_df.to_csv(index=False).encode("utf-8"), "optimal_matches.csv", "text/csv")
+    
+        st.download_button("Download Optimal Matches CSV",
+                           optimal_df.to_csv(index=False).encode("utf-8"),
+                           "optimal_matches.csv",
+                           "text/csv")
