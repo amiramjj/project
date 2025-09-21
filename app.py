@@ -248,12 +248,11 @@ if uploaded_file:
     st.write("### Matching Scores (Key Fields Only)")
     results = []
     for _, row in df.iterrows():
-        score, status, reasons, bonus_reasons = calculate_score(row)
+        score, reasons, bonus_reasons = calculate_score(row)
         result_row = {
             "client_name": row["client_name"],
             "maid_id": row["maid_id"],
             "Final Score %": score,
-            "Status": status,
             **reasons,
             "Bonus Reasons": ", ".join(bonus_reasons) if bonus_reasons else "None"
         }
