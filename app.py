@@ -111,6 +111,24 @@ def score_pets(client, maid, handling):
             return w, "Match: both cats & dogs allowed"
     return None, "Neutral"
 
+def score_living(client, maid):
+    w = THEME_WEIGHTS["living"]
+    if client == "unspecified":
+        return None, "Neutral: client did not specify living arrangement"
+
+    # Client requires private room
+    if client in ["private_room", "live_out+private_room"]:
+        return w, "Match: private room requirement satisfied"
+
+    # Client requires Abu Dhabi posting
+    if client in ["private_room+abu_dhabi", "live_out+private_room+abu_dhabi"]:
+        if "refuses_abu_dhabi" in maid:
+            return 0, "Mismatch: maid refuses Abu Dhabi"
+        else:
+            return w, "Match: Abu Dhabi posting acceptable"
+
+    return None, "Neutral"
+
 def score_nationality(client, maid):
     w = THEME_WEIGHTS["nationality"]
     if client == "any":
