@@ -387,7 +387,7 @@ if uploaded_file:
 
 
     # ---------------- Tab 3: Customer Interface ----------------
-    with st.tab("Customer Interface"):
+    with tab3:
         st.write("### Try Your Own Preferences")
     
         # Input widgets
