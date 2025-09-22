@@ -288,36 +288,37 @@ if uploaded_file:
     # ---------------- Tab 2: Optimal Matches ----------------
     # ---------------- Preprocessing Step ----------------
     # Keep only relevant columns
-    client_cols = [
-        "client_name", "clientmts_household_type", "clientmts_special_cases",
-        "clientmts_pet_type", "clientmts_dayoff_policy",
-        "clientmts_nationality_preference", "clientmts_living_arrangement",
-        "clientmts_cuisine_preference"
-    ]
+    with tab2:
+        client_cols = [
+            "client_name", "clientmts_household_type", "clientmts_special_cases",
+            "clientmts_pet_type", "clientmts_dayoff_policy",
+            "clientmts_nationality_preference", "clientmts_living_arrangement",
+            "clientmts_cuisine_preference"
+        ]
+        
+        maid_cols = [
+            "maid_id", "years_of_experience", "maidspeaks_amharic", "maidspeaks_arabic",
+            "maidspeaks_english", "maidspeaks_french", "maidspeaks_oromo",
+            "maid_grouped_nationality", "maid_cooking_khaleeji", "maid_cooking_lebanese",
+            "maid_cooking_international", "maid_cooking_not_specified",
+            "maidmts_household_type", "maidmts_pet_type", "maidmts_dayoff_policy",
+            "maidmts_living_arrangement", "maidpref_education", "maidpref_kids_experience",
+            "maidpref_pet_handling", "maidpref_personality", "maidpref_travel",
+            "maidpref_smoking", "maidpref_caregiving_profile"
+        ]
+        
+        # Split into clients and maids
+        clients_df = df[client_cols].drop_duplicates(subset=["client_name"]).reset_index(drop=True)
+        maids_df = df[maid_cols].drop_duplicates(subset=["maid_id"]).reset_index(drop=True)
+        
+        st.write(f" Deduplication complete: {len(clients_df)} unique clients, {len(maids_df)} unique maids.")
     
-    maid_cols = [
-        "maid_id", "years_of_experience", "maidspeaks_amharic", "maidspeaks_arabic",
-        "maidspeaks_english", "maidspeaks_french", "maidspeaks_oromo",
-        "maid_grouped_nationality", "maid_cooking_khaleeji", "maid_cooking_lebanese",
-        "maid_cooking_international", "maid_cooking_not_specified",
-        "maidmts_household_type", "maidmts_pet_type", "maidmts_dayoff_policy",
-        "maidmts_living_arrangement", "maidpref_education", "maidpref_kids_experience",
-        "maidpref_pet_handling", "maidpref_personality", "maidpref_travel",
-        "maidpref_smoking", "maidpref_caregiving_profile"
-    ]
-    
-    # Split into clients and maids
-    clients_df = df[client_cols].drop_duplicates(subset=["client_name"]).reset_index(drop=True)
-    maids_df = df[maid_cols].drop_duplicates(subset=["maid_id"]).reset_index(drop=True)
-    
-    st.write(f" Deduplication complete: {len(clients_df)} unique clients, {len(maids_df)} unique maids.")
-
-    # Preview clients_df
-    st.write("### Clients (deduplicated)")
-    st.dataframe(clients_df.head(20))   # show first 20 rows
-    st.write("Client columns:", clients_df.columns.tolist())
-    
-    # Preview maids_df
-    st.write("### Maids (deduplicated)")
-    st.dataframe(maids_df.head(20))   # show first 20 rows
-    st.write("Maid columns:", maids_df.columns.tolist())
+        # Preview clients_df
+        st.write("### Clients (deduplicated)")
+        st.dataframe(clients_df.head(20))   # show first 20 rows
+        st.write("Client columns:", clients_df.columns.tolist())
+        
+        # Preview maids_df
+        st.write("### Maids (deduplicated)")
+        st.dataframe(maids_df.head(20))   # show first 20 rows
+        st.write("Maid columns:", maids_df.columns.tolist())
