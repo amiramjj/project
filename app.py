@@ -322,3 +322,65 @@ if uploaded_file:
         st.write("### Maids (deduplicated)")
         st.dataframe(maids_df.head(20))   # show first 20 rows
         st.write("Maid columns:", maids_df.columns.tolist())
+
+        st.write("### Optimal Matches (Top 2 Maids per Client)")
+    
+        @st.cache_data
+        def compute_optimal_matches(clients_df, maids_df):
+            results = []
+            for _, client_row in clients_df.iterrows():
+                candidate_scores = []
+                for _, maid_row in maids_df.iterrows():
+                    combined_row = {**client_row.to_dict(), **maid_row.to_dict()}
+                    score, reasons, bonus_reasons = calculate_score(combined_row)
+                    candidate_scores.append({
+                        "maid_id": maid_row["maid_id"],
+                        "Final Score %": score,
+                        **reasons,
+                        "Bonus Reasons": ", ".join(bonus_reasons) if bonus_reasons else "None"
+                    })
+                # pick top 2
+                top_matches = sorted(candidate_scores, key=lambda x: x["Final Score %"], reverse=True)[:2]
+                for match in top_matches:
+                    results.append({
+                        "client_name": client_row["client_name"],
+                        "maid_id": match["maid_id"],
+                        "Final Score %": match["Final Score %"],
+                        "Household & Kids Reason": match["Household & Kids Reason"],
+                        "Special Cases Reason": match["Special Cases Reason"],
+                        "Pets Reason": match["Pets Reason"],
+                        "Living Reason": match["Living Reason"],
+                        "Nationality Reason": match["Nationality Reason"],
+                        "Cuisine Reason": match["Cuisine Reason"],
+                        "Bonus Reasons": match["Bonus Reasons"]
+                    })
+            return pd.DataFrame(results)
+    
+        # Run cached optimal matches
+        optimal_df = compute_optimal_matches(clients_df, maids_df)
+        st.dataframe(optimal_df)
+    
+        # Dropdown for explanations
+        pair_options = optimal_df.apply(
+            lambda r: f"{r['client_name']} ↔ {r['maid_id']} ({r['Final Score %']}%)", axis=1
+        )
+        selected_pair = st.selectbox("Select a Client–Maid Pair for Detailed Explanation", pair_options)
+    
+        if selected_pair:
+            row = optimal_df.iloc[pair_options.tolist().index(selected_pair)]
+            st.subheader(f"Explanation for {row['client_name']} ↔ {row['maid_id']}")
+            st.write("**Household & Kids:**", row["Household & Kids Reason"])
+            st.write("**Special Cases:**", row["Special Cases Reason"])
+            st.write("**Pets:**", row["Pets Reason"])
+            st.write("**Living:**", row["Living Reason"])
+            st.write("**Nationality:**", row["Nationality Reason"])
+            st.write("**Cuisine:**", row["Cuisine Reason"])
+            st.write("**Bonus:**", row["Bonus Reasons"])
+    
+        st.download_button(
+            "Download Optimal Matches CSV",
+            optimal_df.to_csv(index=False).encode("utf-8"),
+            "optimal_matches.csv",
+            "text/csv"
+        )
+    
