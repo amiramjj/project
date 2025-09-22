@@ -286,54 +286,26 @@ if uploaded_file:
     
 
     # ---------------- Tab 2: Optimal Matches ----------------
+    # ---------------- Tab 2: Optimal Matches ----------------
+    with tab2:
+        st.write("### Optimal Matches (Top 2 Maids per Client)")
     
-    @st.cache_data
-    def compute_optimal_matches(df):
-        # --- Split into client_df and maid_df ---
-        client_cols = [
-            "client_name",
-            "clientmts_household_type",
-            "clientmts_special_cases",
-            "clientmts_pet_type",
-            "clientmts_dayoff_policy",
-            "clientmts_nationality_preference",
-            "clientmts_living_arrangement",
-            "clientmts_cuisine_preference",
-        ]
-        maid_cols = [
-            "maid_id",
-            "maidmts_household_type",
-            "maidmts_pet_type",
-            "maidmts_dayoff_policy",
-            "maidmts_living_arrangement",
-            "maidpref_education",
-            "maidpref_kids_experience",
-            "maidpref_pet_handling",
-            "maidpref_personality",
-            "maidpref_travel",
-            "maidpref_smoking",
-            "maidpref_caregiving_profile",
-            "maid_grouped_nationality",
-            "maid_cooking_lebanese",
-            "maid_cooking_khaleeji",
-            "maid_cooking_international",
-            "years_of_experience",
-            "maidspeaks_arabic",
-            "maidspeaks_english",
-            "maidspeaks_french",
-        ]
+        # Read clients and maids from separate sheets in the uploaded Excel
+        clients_df = pd.read_excel(uploaded_file, sheet_name=0)  # First sheet: clients
+        maids_df = pd.read_excel(uploaded_file, sheet_name=1)    # Second sheet: maids
     
-        client_df = df[client_cols].drop_duplicates(subset=["client_name"]).reset_index(drop=True)
-        maid_df = df[maid_cols].drop_duplicates(subset=["maid_id"]).reset_index(drop=True)
-    
-        # --- Loop through clients × maids ---
         results = []
-        for _, client_row in client_df.iterrows():
+        for _, client_row in clients_df.iterrows():
             candidate_scores = []
-            for _, maid_row in maid_df.iterrows():
-                # Pass client + maid separately to calculate_score
-                row = {**client_row.to_dict(), **maid_row.to_dict()}
-                score, reasons, bonus_reasons = calculate_score(row)
+            for _, maid_row in maids_df.iterrows():
+                # Build a row that contains both client and maid features
+                combined_row = {
+                    **{col: client_row[col] for col in clients_df.columns if col.startswith("clientmts_") or col in ["client_name"]},
+                    **{col: maid_row[col] for col in maids_df.columns if col.startswith("maid") or col in ["maid_id", "years_of_experience", "maidspeaks_arabic", "maidspeaks_english", "maidspeaks_french"]}
+                }
+    
+                score, reasons, bonus_reasons = calculate_score(combined_row)
+    
                 candidate_scores.append({
                     "maid_id": maid_row["maid_id"],
                     "Final Score %": score,
@@ -341,8 +313,8 @@ if uploaded_file:
                     "Bonus Reasons": ", ".join(bonus_reasons) if bonus_reasons else "None"
                 })
     
-            # Take top 3 for this client
-            top_matches = sorted(candidate_scores, key=lambda x: x["Final Score %"], reverse=True)[:3]
+            # Take top 2 matches for this client
+            top_matches = sorted(candidate_scores, key=lambda x: x["Final Score %"], reverse=True)[:2]
             for match in top_matches:
                 results.append({
                     "client_name": client_row["client_name"],
@@ -357,18 +329,12 @@ if uploaded_file:
                     "Bonus Reasons": match["Bonus Reasons"]
                 })
     
-        return pd.DataFrame(results)
-    
-    
-    with tab2:
-        st.write("### Optimal Matches (Top 3 Maids per Client)")
-    
-        optimal_df = compute_optimal_matches(df)
+        optimal_df = pd.DataFrame(results)
         st.dataframe(optimal_df)
     
-        # Dropdown: select client
+        # Dropdown to select a client and see their top 2 matches
         client_options = optimal_df["client_name"].unique().tolist()
-        selected_client = st.selectbox("Select a Client to View Top 3 Matches", client_options)
+        selected_client = st.selectbox("Select a Client to View Top 2 Matches", client_options)
     
         if selected_client:
             client_matches = optimal_df[optimal_df["client_name"] == selected_client]
