@@ -247,7 +247,7 @@ if uploaded_file:
     df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith(".csv") else pd.read_excel(uploaded_file)
 
     # Create tabs
-    tab1, tab2 = st.tabs(["Matching Scores", "Optimal Matches"])
+    tab1, tab2, tab3 = st.tabs(["Matching Scores", "Optimal Matches","Customer Interface"])
 
     # ---------------- Tab 1: Existing Matching ----------------
     with tab1:
@@ -384,3 +384,59 @@ if uploaded_file:
             "text/csv"
         )
     
+
+
+    # ---------------- Tab 3: Customer Interface ----------------
+    with st.tab("Customer Interface"):
+        st.write("### Try Your Own Preferences")
+    
+        # Input widgets
+        c_household = st.selectbox("Household Type", ["unspecified", "baby", "many_kids", "baby_and_kids"])
+        c_special = st.selectbox("Special Cases", ["unspecified", "elderly", "special_needs", "elderly_and_special"])
+        c_pets = st.selectbox("Pet Type", ["unspecified", "cat", "dog", "both"])
+        c_living = st.selectbox("Living Arrangement", [
+            "unspecified", "private_room", "live_out+private_room",
+            "private_room+abu_dhabi", "live_out+private_room+abu_dhabi"
+        ])
+        c_nationality = st.selectbox("Nationality Preference", [
+            "any", "filipina", "ethiopian maid", "west african nationality", "indian"
+        ])
+        c_cuisine = st.multiselect("Cuisine Preference", ["lebanese", "khaleeji", "international"])
+        cuisine_pref = "+".join(c_cuisine) if c_cuisine else "unspecified"
+    
+        # Button to run match
+        if st.button("Find Best Maids"):
+            client_row = {
+                "clientmts_household_type": c_household,
+                "clientmts_special_cases": c_special,
+                "clientmts_pet_type": c_pets,
+                "clientmts_living_arrangement": c_living,
+                "clientmts_nationality_preference": c_nationality,
+                "clientmts_cuisine_preference": cuisine_pref
+            }
+    
+            results = []
+            for _, maid_row in maids_df.iterrows():
+                row = {**client_row, **maid_row.to_dict()}
+                score, reasons, bonus_reasons = calculate_score(row)
+                results.append({
+                    "maid_id": maid_row["maid_id"],
+                    "Final Score %": score,
+                    **reasons,
+                    "Bonus Reasons": ", ".join(bonus_reasons) if bonus_reasons else "None"
+                })
+    
+            top_matches = sorted(results, key=lambda x: x["Final Score %"], reverse=True)[:3]
+            top_df = pd.DataFrame(top_matches)
+            st.dataframe(top_df)
+    
+            # Detailed explanations
+            for match in top_matches:
+                with st.expander(f"Maid {match['maid_id']} → {match['Final Score %']}%"):
+                    st.write("**Household & Kids:**", match["Household & Kids Reason"])
+                    st.write("**Special Cases:**", match["Special Cases Reason"])
+                    st.write("**Pets:**", match["Pets Reason"])
+                    st.write("**Living:**", match["Living Reason"])
+                    st.write("**Nationality:**", match["Nationality Reason"])
+                    st.write("**Cuisine:**", match["Cuisine Reason"])
+                    st.write("**Bonus:**", match["Bonus Reasons"])
